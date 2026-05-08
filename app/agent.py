@@ -39,7 +39,7 @@ def inicializar_cliente() -> genai.GenerativeModel:
     )
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",  # Rápido e gratuito no plano free
+        model_name="gemini-2.5-flash",  # Rápido e gratuito no plano free
         generation_config=generation_config,
         system_instruction=SYSTEM_PROMPT,
     )
