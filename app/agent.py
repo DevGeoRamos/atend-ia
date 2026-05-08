@@ -9,7 +9,7 @@ import google.generativeai as genai
 import json
 import os
 from dotenv import load_dotenv
-from app.prompts import SYSTEM_PROMPT, ANALYSIS_TEMPLATE, FALLBACK_CONTEXT
+from prompts import SYSTEM_PROMPT, ANALYSIS_TEMPLATE, FALLBACK_CONTEXT
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
