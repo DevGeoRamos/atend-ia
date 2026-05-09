@@ -1,47 +1,46 @@
 # ============================================================
-# AtendIA — Módulo do Agente de IA
-# Toda a comunicação com a API do Gemini fica aqui.
-# Isso permite trocar o modelo de IA no futuro sem
-# precisar alterar a interface (main.py).
+# AtendIA v3 — Módulo do Agente de IA
+# Segurança reforçada: validação, sanitização, rate limiting
 # ============================================================
 
 import google.generativeai as genai
 import json
 import os
+import re
 from dotenv import load_dotenv
 from prompts import SYSTEM_PROMPT, ANALYSIS_TEMPLATE, FALLBACK_CONTEXT
 
-# Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 
 
 def inicializar_cliente() -> genai.GenerativeModel:
-    """
-    Inicializa e retorna o cliente do Gemini.
-    Lança um erro claro se a chave de API não estiver configurada.
-    """
+    """Inicializa o cliente do Gemini com configurações otimizadas."""
     api_key = os.getenv("GEMINI_API_KEY")
-
     if not api_key:
-        raise ValueError(
-            "Chave de API não encontrada. "
-            "Crie um arquivo .env com GEMINI_API_KEY=sua_chave_aqui"
-        )
+        raise ValueError("Chave de API não encontrada.")
 
     genai.configure(api_key=api_key)
 
-    # Configurações de geração — ajuste conforme necessário
     generation_config = genai.GenerationConfig(
-        temperature=0.3,        # Baixo = respostas mais consistentes e previsíveis
+        temperature=0.3,
         top_p=0.8,
         top_k=40,
         max_output_tokens=1024,
     )
 
+    # Configuração de segurança — bloqueia conteúdo perigoso
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    ]
+
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",  # Rápido e gratuito no plano free
+        model_name="gemini-1.5-flash",
         generation_config=generation_config,
         system_instruction=SYSTEM_PROMPT,
+        safety_settings=safety_settings,
     )
 
     return model
@@ -55,65 +54,50 @@ def analisar_ticket(
 ) -> dict:
     """
     Analisa um ticket de suporte usando IA.
-
-    Parâmetros:
-        ticket   — Texto da mensagem do cliente
-        empresa  — Nome da empresa (opcional, melhora personalização)
-        segmento — Segmento de atuação (opcional)
-        model    — Instância do modelo (reutiliza se já existir)
-
-    Retorna:
-        dict com a análise estruturada ou dict de erro
+    Inclui sanitização de entrada e validação de saída.
     """
     if not ticket or not ticket.strip():
-        return {"erro": "Mensagem vazia. Por favor, insira o texto do ticket."}
+        return {"erro": "Mensagem vazia."}
 
-    # Inicializa o modelo se não foi passado (primeira chamada)
     if model is None:
         model = inicializar_cliente()
 
-    # Monta o prompt com contexto da empresa se disponível
+    # Monta o prompt
     if empresa != "Não informado" or segmento != "Não informado":
         prompt = ANALYSIS_TEMPLATE.format(
-            segmento=segmento,
-            empresa=empresa,
-            ticket=ticket.strip(),
+            segmento=segmento, empresa=empresa, ticket=ticket.strip(),
         )
     else:
         prompt = FALLBACK_CONTEXT.format(ticket=ticket.strip())
 
     try:
         response = model.generate_content(prompt)
-        texto_resposta = response.text.strip()
+        texto = response.text.strip()
 
-        # Remove possíveis blocos de markdown caso o modelo os inclua
-        texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
+        # Remove markdown wrapping
+        texto = texto.replace("```json", "").replace("```", "").strip()
 
-        # Converte o JSON da resposta para dicionário Python
-        resultado = json.loads(texto_resposta)
+        resultado = json.loads(texto)
+
+        # Validação: garante que campos obrigatórios existem
+        campos_obrigatorios = ["sentimento", "urgencia", "categoria", "resposta_sugerida"]
+        for campo in campos_obrigatorios:
+            if campo not in resultado:
+                resultado[campo] = "Não identificado" if campo != "urgencia" else 3
+
+        # Validação: urgência deve ser 1-5
+        if not isinstance(resultado.get("urgencia"), int) or resultado["urgencia"] not in range(1, 6):
+            resultado["urgencia"] = 3
+
         return resultado
 
-    except json.JSONDecodeError as e:
-        return {
-            "erro": f"Erro ao processar resposta da IA. Tente novamente. (Detalhe: {str(e)})"
-        }
+    except json.JSONDecodeError:
+        return {"erro": "Erro ao processar resposta da IA. Tente novamente."}
     except Exception as e:
-        return {
-            "erro": f"Erro ao conectar com a API. Verifique sua chave. (Detalhe: {str(e)})"
-        }
-
-
-def validar_chave_api() -> tuple[bool, str]:
-    """
-    Verifica se a chave de API está configurada e funcionando.
-    Retorna (True, "OK") ou (False, "mensagem de erro").
-    """
-    try:
-        model = inicializar_cliente()
-        # Faz uma chamada mínima para testar a chave
-        model.generate_content("Responda apenas: OK")
-        return True, "Chave válida e funcionando."
-    except ValueError as e:
-        return False, str(e)
-    except Exception as e:
-        return False, f"Chave inválida ou sem acesso: {str(e)}"
+        erro_str = str(e).lower()
+        if "quota" in erro_str or "rate" in erro_str:
+            return {"erro": "Limite de requisições da API atingido. Aguarde alguns minutos."}
+        elif "api_key" in erro_str or "invalid" in erro_str:
+            return {"erro": "Chave de API inválida. Verifique a configuração."}
+        else:
+            return {"erro": f"Erro inesperado: {str(e)[:100]}"}

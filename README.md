@@ -183,5 +183,5 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para de
 ---
 
 <p align="center">
-  Desenvolvido com IA por <a href="https://github.com/DevGeoRamos">Geovane Ramos</a>
+  Desenvolvido com ❤️ e IA por <a href="https://github.com/DevGeoRamos">Geovane Ramos</a>
 </p>
