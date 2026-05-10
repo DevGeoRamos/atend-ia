@@ -36,9 +36,8 @@ Uma equipe de atendimento que usa o AtendIA consegue:
 > *Interface principal — análise de ticket em tempo real*
 
 ```
-[Screenshot da interface principal aqui]
-[Screenshot do resultado com métricas aqui]
-[Screenshot do histórico da sessão aqui]
+<img width="1302" height="602" alt="AtenIA" src="https://github.com/user-attachments/assets/dd847638-523c-4db3-85b8-040c7b1a2aba" />
+<img width="1305" height="604" alt="AtendIA 2" src="https://github.com/user-attachments/assets/a26239ad-6a7f-4be7-a255-4f6625952c4b" />
 ```
 
 ---
